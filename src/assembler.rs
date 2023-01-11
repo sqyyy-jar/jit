@@ -1,7 +1,11 @@
+use std::collections::HashMap;
+
 pub trait Assembler {
     type AsmRoutine: Subroutine;
 
     fn get_label_address(&self, name: &str) -> usize;
+
+    fn jit(self) -> HashMap<String, fn()>;
 }
 
 pub trait Subroutine {

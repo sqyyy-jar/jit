@@ -4,7 +4,7 @@ use std::collections::HashMap;
 pub struct Asm {
     finalizing: bool,
     routines: Vec<Routine>,
-    labels: HashMap<String, usize>,
+    labels: HashMap<String, fn()>,
 }
 
 impl Assembler for Asm {
@@ -14,7 +14,11 @@ impl Assembler for Asm {
         if !self.finalizing {
             return 0;
         }
-        self.labels.get(name).cloned().unwrap_or(0)
+        self.labels.get(name).map_or_else(|| 0, |it| *it as usize)
+    }
+
+    fn jit(self) -> HashMap<String, fn()> {
+        todo!()
     }
 }
 
