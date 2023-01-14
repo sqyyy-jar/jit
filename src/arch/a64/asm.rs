@@ -19,7 +19,7 @@ impl Assembler for Asm {
 
     fn jit(self) -> HashMap<String, fn()> {
         let size: usize = self.routines.iter().map(|it| it.code.len()).sum();
-        
+
         todo!()
     }
 }
