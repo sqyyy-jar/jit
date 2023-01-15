@@ -46,7 +46,7 @@ pub unsafe fn dealloc_aligned(ptr: *mut u8, size: usize) {
     );
 }
 
-pub fn make_executable(ptr: *mut u8, size: usize) -> bool {
+pub fn make_executable_aligned(ptr: *mut u8, size: usize) -> bool {
     unsafe {
         let alignment = get_system_alignment();
         #[cfg(unix)]
@@ -72,7 +72,7 @@ pub fn make_executable(ptr: *mut u8, size: usize) -> bool {
     }
 }
 
-pub fn make_readwrite(ptr: *mut u8, size: usize) -> bool {
+pub fn make_readwrite_aligned(ptr: *mut u8, size: usize) -> bool {
     unsafe {
         let alignment = get_system_alignment();
         #[cfg(unix)]

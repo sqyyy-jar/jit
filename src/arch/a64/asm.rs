@@ -1,10 +1,13 @@
-use crate::assembler::{Assembler, PostOp, Subroutine};
-use std::collections::HashMap;
+use crate::{
+    assembler::{Assembler, PostOp, Subroutine, VTable},
+    mem,
+};
+use std::{collections::HashMap, mem::transmute, slice};
 
 pub struct Asm {
     finalizing: bool,
     routines: Vec<Routine>,
-    labels: HashMap<String, fn()>,
+    vtable: HashMap<String, fn()>,
 }
 
 impl Assembler for Asm {
@@ -14,17 +17,55 @@ impl Assembler for Asm {
         if !self.finalizing {
             return 0;
         }
-        self.labels.get(name).map_or_else(|| 0, |it| *it as usize)
+        self.vtable.get(name).map_or_else(|| 0, |it| *it as usize)
     }
 
-    fn jit(self) -> HashMap<String, fn()> {
+    fn jit(mut self) -> Option<VTable> {
+        self.finalizing = true;
         let size: usize = self.routines.iter().map(|it| it.code.len()).sum();
-
-        todo!()
+        let ptr = mem::alloc_aligned(size);
+        if ptr.is_null() {
+            dbg!("Could not allocate memory");
+            return None;
+        }
+        let mut offset = 0;
+        let mut post_op_map = Vec::new();
+        while let Some(Routine {
+            name,
+            code,
+            post_ops,
+        }) = self.routines.pop()
+        {
+            post_op_map.push((offset, code.len(), post_ops));
+            self.vtable
+                .insert(name, unsafe { transmute(ptr.add(offset)) });
+            for byte in code {
+                unsafe {
+                    *ptr.add(offset) = byte;
+                }
+                offset += 1;
+            }
+        }
+        for (offset, len, post_ops) in post_op_map {
+            for post_op in post_ops {
+                post_op.process(&self, unsafe { ptr.add(offset) } as _, unsafe {
+                    slice::from_raw_parts_mut(ptr.add(offset), len)
+                });
+            }
+        }
+        if !mem::make_executable_aligned(ptr, size) {
+            unsafe {
+                mem::dealloc_aligned(ptr, size);
+            }
+            dbg!("Could not make memory executable");
+            return None;
+        }
+        Some(VTable::new(ptr, size, self.vtable))
     }
 }
 
 pub struct Routine {
+    name: String,
     code: Vec<u8>,
     post_ops: Vec<Op>,
 }
