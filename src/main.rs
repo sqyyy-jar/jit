@@ -1,31 +1,40 @@
 use arch::a64::{asm::Asm, reg::Reg, routine::Routine};
 use assembler::Assembler;
-use std::io::Result;
+use std::{
+    env::args,
+    fs::File,
+    io::{Result, Write},
+};
 
 pub mod arch;
 pub mod assembler;
 pub mod mem;
 
 fn main() -> Result<()> {
-    //let mut f = File::create(args().nth(1).unwrap())?;
+    const V: bool = false;
     let mut asm = Asm::default();
 
     let mut main = Routine::new("main".to_string());
-    //main.mov_imm16(Reg::X10, 0xCAFE);
-    //main.br_link("test".to_string());
+    main.sub_imm12(Reg::X31, Reg::X31, 16);
+    main.str_uimm12_offset(Reg::X31, Reg::X30, 0);
+    main.br_link("test".to_string());
+    main.ldr_uimm12_offset(Reg::X30, Reg::X31, 0);
+    main.add_imm12(Reg::X31, Reg::X31, 16);
     main.ret();
     asm.push_routine(main);
 
     let mut test = Routine::new("test".to_string());
-    test.mov_imm16(Reg::X30, 0xDEAD);
-    test.br("main".to_string());
     test.ret();
     asm.push_routine(test);
 
-    let vtable = asm.jit().unwrap();
-    vtable.lookup("main").unwrap()();
-    // let (code, vtable) = asm.virtual_jit().unwrap();
-    // f.write_all(&code)?;
-    // println!("VTable: {vtable:#?}");
+    if V {
+        let mut f = File::create(args().nth(1).unwrap())?;
+        let (code, vtable) = asm.virtual_jit().unwrap();
+        f.write_all(&code)?;
+        println!("VTable: {vtable:#?}");
+    } else {
+        let vtable = asm.jit().unwrap();
+        vtable.lookup("main").unwrap()();
+    }
     Ok(())
 }
