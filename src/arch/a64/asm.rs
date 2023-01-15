@@ -19,20 +19,25 @@ impl Asm {
         let address = view.address();
         while let Some(Routine {
             name,
+            constants,
             code,
             post_ops,
         }) = self.routines.pop()
         {
-            post_op_map.push((offset, code.len(), post_ops));
+            post_op_map.push((offset, constants.len(), code.len(), post_ops));
+            for byte in constants {
+                view.push(byte);
+                offset += 1;
+            }
             self.vtable.insert(name, address + offset);
             for byte in code {
                 view.push(byte);
                 offset += 1;
             }
         }
-        for (offset, len, post_ops) in post_op_map {
+        for (offset, const_len, len, post_ops) in post_op_map {
             for post_op in post_ops {
-                post_op.process(self, address + offset, view.slice_at_mut(offset, len));
+                post_op.process(self, address + offset, view.slice_at_mut(offset, const_len + len));
             }
         }
     }
@@ -64,7 +69,11 @@ impl Assembler for Asm {
 
     fn jit(mut self) -> Option<VTable> {
         self.finalizing = true;
-        let size: usize = self.routines.iter().map(|it| it.bytes().len()).sum();
+        let size: usize = self
+            .routines
+            .iter()
+            .map(|it| it.constants().len() + it.code().len())
+            .sum();
         let ptr = mem::alloc_aligned(size);
         if ptr.is_null() {
             dbg!("Could not allocate memory");
@@ -90,7 +99,7 @@ impl Assembler for Asm {
 
     fn virtual_jit(mut self) -> Option<(Vec<u8>, HashMap<String, usize>)> {
         self.finalizing = true;
-        let size: usize = self.routines.iter().map(|it| it.bytes().len()).sum();
+        let size: usize = self.routines.iter().map(|it| it.code().len()).sum();
         let mut vec = Vec::with_capacity(size);
         let mut view = VecMemoryView::new(0, &mut vec);
         self.int_jit(&mut view);

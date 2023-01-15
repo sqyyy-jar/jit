@@ -12,7 +12,9 @@ pub trait Assembler {
 }
 
 pub trait Subroutine {
-    fn bytes(&self) -> &[u8];
+    fn constants(&self) -> &[u8];
+
+    fn code(&self) -> &[u8];
 
     fn process(&self, assembler: &impl Assembler, abs_addr: usize, bytes: &mut [u8]);
 }

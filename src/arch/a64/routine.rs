@@ -3,6 +3,7 @@ use crate::assembler::{Assembler, PostOp, Subroutine};
 
 pub struct Routine {
     pub(crate) name: String,
+    pub(crate) constants: Vec<u8>,
     pub(crate) code: Vec<u8>,
     pub(crate) post_ops: Vec<Op>,
 }
@@ -11,6 +12,7 @@ impl Routine {
     pub fn new(name: String) -> Self {
         Self {
             name,
+            constants: Vec::with_capacity(0),
             code: Vec::with_capacity(0),
             post_ops: Vec::with_capacity(0),
         }
@@ -181,13 +183,13 @@ impl Routine {
 
     pub fn const_32(&mut self, value: u32) {
         for byte in value.to_ne_bytes() {
-            self.code.push(byte);
+            self.constants.push(byte);
         }
     }
 
     pub fn const_64(&mut self, value: u64) {
         for byte in value.to_ne_bytes() {
-            self.code.push(byte);
+            self.constants.push(byte);
         }
     }
 
@@ -199,7 +201,11 @@ impl Routine {
 }
 
 impl Subroutine for Routine {
-    fn bytes(&self) -> &[u8] {
+    fn constants(&self) -> &[u8] {
+        &self.constants
+    }
+
+    fn code(&self) -> &[u8] {
         &self.code
     }
 
