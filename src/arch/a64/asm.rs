@@ -1,13 +1,39 @@
 use crate::{
     assembler::{Assembler, PostOp, Subroutine, VTable},
-    mem,
+    mem::{self, MemoryView, RawMemoryView, VecMemoryView},
 };
-use std::{collections::HashMap, mem::transmute, slice};
+use std::{collections::HashMap, mem::transmute};
 
 pub struct Asm {
     finalizing: bool,
     routines: Vec<Routine>,
-    vtable: HashMap<String, fn()>,
+    vtable: HashMap<String, usize>,
+}
+
+impl Asm {
+    fn int_jit<'a>(&mut self, view: &mut impl MemoryView<'a>) {
+        let mut offset = 0;
+        let mut post_op_map = Vec::new();
+        let address = view.address();
+        while let Some(Routine {
+            name,
+            code,
+            post_ops,
+        }) = self.routines.pop()
+        {
+            post_op_map.push((offset, code.len(), post_ops));
+            self.vtable.insert(name, address + offset);
+            for byte in code {
+                view.push(byte);
+                offset += 1;
+            }
+        }
+        for (offset, len, post_ops) in post_op_map {
+            for post_op in post_ops {
+                post_op.process(self, address + offset, view.slice_at_mut(offset, len));
+            }
+        }
+    }
 }
 
 impl Assembler for Asm {
@@ -15,9 +41,9 @@ impl Assembler for Asm {
 
     fn get_label_address(&self, name: &str) -> usize {
         if !self.finalizing {
-            return 0;
+            return usize::MAX;
         }
-        self.vtable.get(name).map_or_else(|| 0, |it| *it as usize)
+        self.vtable.get(name).cloned().unwrap_or(0)
     }
 
     fn jit(mut self) -> Option<VTable> {
@@ -28,31 +54,7 @@ impl Assembler for Asm {
             dbg!("Could not allocate memory");
             return None;
         }
-        let mut offset = 0;
-        let mut post_op_map = Vec::new();
-        while let Some(Routine {
-            name,
-            code,
-            post_ops,
-        }) = self.routines.pop()
-        {
-            post_op_map.push((offset, code.len(), post_ops));
-            self.vtable
-                .insert(name, unsafe { transmute(ptr.add(offset)) });
-            for byte in code {
-                unsafe {
-                    *ptr.add(offset) = byte;
-                }
-                offset += 1;
-            }
-        }
-        for (offset, len, post_ops) in post_op_map {
-            for post_op in post_ops {
-                post_op.process(&self, unsafe { ptr.add(offset) } as _, unsafe {
-                    slice::from_raw_parts_mut(ptr.add(offset), len)
-                });
-            }
-        }
+        self.int_jit(&mut RawMemoryView::new(ptr));
         if !mem::make_executable_aligned(ptr, size) {
             unsafe {
                 mem::dealloc_aligned(ptr, size);
@@ -60,7 +62,30 @@ impl Assembler for Asm {
             dbg!("Could not make memory executable");
             return None;
         }
-        Some(VTable::new(ptr, size, self.vtable))
+        Some(VTable::new(
+            ptr,
+            size,
+            self.vtable
+                .into_iter()
+                .map(|(k, v)| (k, unsafe { transmute(v) }))
+                .collect(),
+        ))
+    }
+
+    fn virtual_jit(mut self) -> Option<(Vec<u8>, HashMap<String, usize>)> {
+        self.finalizing = true;
+        let size: usize = self.routines.iter().map(|it| it.code.len()).sum();
+        let mut vec = Vec::with_capacity(size);
+        let mut view = VecMemoryView::new(0, &mut vec);
+        self.int_jit(&mut view);
+        let address = view.address();
+        Some((
+            vec,
+            self.vtable
+                .into_iter()
+                .map(|(k, v)| (k, v - address))
+                .collect(),
+        ))
     }
 }
 
@@ -92,7 +117,7 @@ impl PostOp for Op {
         match self {
             Self::Branch { offset, label } => {
                 let addr = assembler.get_label_address(label);
-                if addr == 0 {
+                if addr == usize::MAX {
                     panic!("Tried to branch to non-existent label");
                 }
                 let rel = addr as isize - abs_addr as isize;
@@ -106,7 +131,7 @@ impl PostOp for Op {
             }
             Self::BranchWithLink { offset, label } => {
                 let addr = assembler.get_label_address(label);
-                if addr == 0 {
+                if addr == usize::MAX {
                     panic!("Tried to branch to non-existent label");
                 }
                 let rel = addr as isize - abs_addr as isize;

@@ -7,6 +7,8 @@ pub trait Assembler {
     fn get_label_address(&self, label: &str) -> usize;
 
     fn jit(self) -> Option<VTable>;
+
+    fn virtual_jit(self) -> Option<(Vec<u8>, HashMap<String, usize>)>;
 }
 
 pub trait Subroutine {
