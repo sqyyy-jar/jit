@@ -1,4 +1,4 @@
-use std::alloc;
+use std::{alloc, slice};
 
 pub const fn align(size: usize, align: usize) -> usize {
     if size % align == 0 {
@@ -95,5 +95,74 @@ pub fn make_readwrite_aligned(ptr: *mut u8, size: usize) -> bool {
             )
             .as_bool()
         }
+    }
+}
+
+pub trait MemoryView<'a> {
+    fn address(&self) -> usize;
+
+    fn push(&mut self, byte: u8);
+
+    fn slice_at(&self, from: usize, size: usize) -> &[u8];
+
+    fn slice_at_mut(&mut self, from: usize, size: usize) -> &mut [u8];
+}
+
+pub struct RawMemoryView {
+    ptr: *mut u8,
+    index: usize,
+}
+
+impl RawMemoryView {
+    pub fn new(ptr: *mut u8) -> Self {
+        Self { ptr, index: 0 }
+    }
+}
+
+impl<'a> MemoryView<'a> for RawMemoryView {
+    fn address(&self) -> usize {
+        self.ptr as usize
+    }
+
+    fn push(&mut self, byte: u8) {
+        unsafe { *self.ptr.add(self.index) = byte };
+        self.index += 1;
+    }
+
+    fn slice_at(&self, from: usize, size: usize) -> &[u8] {
+        unsafe { slice::from_raw_parts(self.ptr.add(from), size) }
+    }
+
+    fn slice_at_mut(&mut self, from: usize, size: usize) -> &mut [u8] {
+        unsafe { slice::from_raw_parts_mut(self.ptr.add(from), size) }
+    }
+}
+
+pub struct VecMemoryView<'a> {
+    address: usize,
+    vec: &'a mut Vec<u8>,
+}
+
+impl<'a> VecMemoryView<'a> {
+    pub fn new(address: usize, vec: &'a mut Vec<u8>) -> Self {
+        Self { address, vec }
+    }
+}
+
+impl<'a> MemoryView<'a> for VecMemoryView<'a> {
+    fn address(&self) -> usize {
+        self.address
+    }
+
+    fn push(&mut self, byte: u8) {
+        self.vec.push(byte);
+    }
+
+    fn slice_at(&self, from: usize, size: usize) -> &[u8] {
+        &self.vec[from..from + size]
+    }
+
+    fn slice_at_mut(&mut self, from: usize, size: usize) -> &mut [u8] {
+        &mut self.vec[from..from + size]
     }
 }
