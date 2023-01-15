@@ -4,6 +4,8 @@ use crate::{
 };
 use std::{collections::HashMap, mem::transmute};
 
+use super::routine::Routine;
+
 pub struct Asm {
     finalizing: bool,
     routines: Vec<Routine>,
@@ -34,6 +36,20 @@ impl Asm {
             }
         }
     }
+
+    pub fn push_routine(&mut self, routine: Routine) {
+        self.routines.push(routine);
+    }
+}
+
+impl Default for Asm {
+    fn default() -> Self {
+        Self {
+            finalizing: false,
+            routines: Vec::with_capacity(0),
+            vtable: HashMap::with_capacity(0),
+        }
+    }
 }
 
 impl Assembler for Asm {
@@ -48,7 +64,7 @@ impl Assembler for Asm {
 
     fn jit(mut self) -> Option<VTable> {
         self.finalizing = true;
-        let size: usize = self.routines.iter().map(|it| it.code.len()).sum();
+        let size: usize = self.routines.iter().map(|it| it.bytes().len()).sum();
         let ptr = mem::alloc_aligned(size);
         if ptr.is_null() {
             dbg!("Could not allocate memory");
@@ -74,7 +90,7 @@ impl Assembler for Asm {
 
     fn virtual_jit(mut self) -> Option<(Vec<u8>, HashMap<String, usize>)> {
         self.finalizing = true;
-        let size: usize = self.routines.iter().map(|it| it.code.len()).sum();
+        let size: usize = self.routines.iter().map(|it| it.bytes().len()).sum();
         let mut vec = Vec::with_capacity(size);
         let mut view = VecMemoryView::new(0, &mut vec);
         self.int_jit(&mut view);
@@ -86,63 +102,5 @@ impl Assembler for Asm {
                 .map(|(k, v)| (k, v - address))
                 .collect(),
         ))
-    }
-}
-
-pub struct Routine {
-    name: String,
-    code: Vec<u8>,
-    post_ops: Vec<Op>,
-}
-
-impl Subroutine for Routine {
-    fn bytes(&self) -> &[u8] {
-        &self.code
-    }
-
-    fn process(&self, assembler: &impl Assembler, abs_addr: usize, bytes: &mut [u8]) {
-        for op in &self.post_ops {
-            op.process(assembler, abs_addr, bytes);
-        }
-    }
-}
-
-pub enum Op {
-    Branch { offset: usize, label: String },
-    BranchWithLink { offset: usize, label: String },
-}
-
-impl PostOp for Op {
-    fn process(&self, assembler: &impl Assembler, abs_addr: usize, bytes: &mut [u8]) {
-        match self {
-            Self::Branch { offset, label } => {
-                let addr = assembler.get_label_address(label);
-                if addr == usize::MAX {
-                    panic!("Tried to branch to non-existent label");
-                }
-                let rel = addr as isize - abs_addr as isize;
-                if !(-0x2000000..=0x1FFFFFF).contains(&rel) {
-                    panic!("Tried to branch to label not in range");
-                }
-                let insn = (0x14000000u32 | (rel as u32 & 0x3FFFFFF)).to_le_bytes();
-                for (idx, byte) in insn.iter().enumerate() {
-                    bytes[offset * 4 + idx] = *byte;
-                }
-            }
-            Self::BranchWithLink { offset, label } => {
-                let addr = assembler.get_label_address(label);
-                if addr == usize::MAX {
-                    panic!("Tried to branch to non-existent label");
-                }
-                let rel = addr as isize - abs_addr as isize;
-                if !(-0x2000000..=0x1FFFFFF).contains(&rel) {
-                    panic!("Tried to branch to label not in range");
-                }
-                let insn = (0x94000000u32 | (rel as u32 & 0x3FFFFFF)).to_le_bytes();
-                for (idx, byte) in insn.iter().enumerate() {
-                    bytes[offset * 4 + idx] = *byte;
-                }
-            }
-        }
     }
 }
