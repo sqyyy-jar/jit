@@ -11,7 +11,7 @@ pub mod assembler;
 pub mod mem;
 
 fn main() -> Result<()> {
-    const V: bool = false;
+    const V: bool = true;
     let mut asm = Asm::default();
 
     let mut main = Routine::new("main".to_string());
