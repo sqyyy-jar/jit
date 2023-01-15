@@ -99,8 +99,100 @@ impl Routine {
         self.nop();
     }
 
+    /// Subtracts the immediate 12-bit value from the value stored in lhs and puts the result
+    /// into the destination register
+    pub fn sub_imm12(&mut self, dst_reg: Reg, lhs: Reg, imm12: u16) {
+        let bits_64 = is_64_bit(dst_reg);
+        if bits_64 != is_64_bit(lhs) {
+            panic!("Both registers must be of equal size");
+        }
+        self.int_insn(
+            0x51000000
+                | ((bits_64 as u32) << 31)
+                | ((imm12 as u32 & 0xFFF) << 10)
+                | ((lhs as u32 & 0x1F) << 5)
+                | (dst_reg as u32 & 0x1F),
+        );
+    }
+
+    /// Adds the immediate 12-bit value from the value stored in lhs and puts the result into the
+    /// destination register
+    pub fn add_imm12(&mut self, dst_reg: Reg, lhs: Reg, imm12: u16) {
+        let bits_64 = is_64_bit(dst_reg);
+        if bits_64 != is_64_bit(lhs) {
+            panic!("Both registers must be of equal size");
+        }
+        self.int_insn(
+            0x11000000
+                | ((bits_64 as u32) << 31)
+                | ((imm12 as u32 & 0xFFF) << 10)
+                | ((lhs as u32 & 0x1F) << 5)
+                | (dst_reg as u32 & 0x1F),
+        );
+    }
+
+    /// Stores the value of `src_reg` into the address `dst_reg + imm12` where `imm12` is unsigned
+    ///
+    /// If `src_reg` is 32-bit `imm12` will be multiplied by 4 before adding it to `dst_reg`
+    ///
+    /// If `src_reg` is 64-bit `imm12` will be multiplied by 8 before adding it to `dst_reg`
+    pub fn str_uimm12_offset(&mut self, dst_reg: Reg, src_reg: Reg, imm12: u16) {
+        if !is_64_bit(dst_reg) {
+            panic!("Destination register must be 64-bit");
+        }
+        self.int_insn(
+            0xB9000000
+                | ((is_64_bit(src_reg) as u32) << 30)
+                | ((imm12 as u32 & 0xFFF) << 10)
+                | ((dst_reg as u32 & 0x1F) << 5)
+                | (src_reg as u32 & 0x1F),
+        );
+    }
+
+    /// Loads the value of address `src_reg + imm12` into `dst_reg` where `imm12` is unsigned
+    ///
+    /// If `dst_reg` is 32-bit `imm12` will be multiplied by 4 before adding it to `src_reg`
+    ///
+    /// If `dst_reg` is 64-bit `imm12` will be multiplied by 8 before adding it to `src_reg`
+    pub fn ldr_uimm12_offset(&mut self, dst_reg: Reg, src_reg: Reg, imm12: u16) {
+        if !is_64_bit(src_reg) {
+            panic!("Source register must be 64-bit");
+        }
+        self.int_insn(
+            0xB9400000
+                | ((is_64_bit(src_reg) as u32) << 30)
+                | ((imm12 as u32 & 0xFFF) << 10)
+                | ((src_reg as u32 & 0x1F) << 5)
+                | (dst_reg as u32 & 0x1F),
+        );
+    }
+
+    /// Loads the value of relative address `rel19` into `dst_reg` where `rel19` is signed
+    ///
+    /// `rel19` will be multiplied by 4 before addressing
+    pub fn ldr_rel19(&mut self, dst_reg: Reg, rel19: i32) {
+        self.int_insn(
+            0x18000000
+                | ((is_64_bit(dst_reg) as u32) << 30)
+                | ((rel19 as u32 & 0x7FFFF) << 5)
+                | (dst_reg as u32 & 0x1F),
+        );
+    }
+
+    pub fn const_32(&mut self, value: u32) {
+        for byte in value.to_ne_bytes() {
+            self.code.push(byte);
+        }
+    }
+
+    pub fn const_64(&mut self, value: u64) {
+        for byte in value.to_ne_bytes() {
+            self.code.push(byte);
+        }
+    }
+
     fn int_insn(&mut self, value: u32) {
-        for byte in value.to_le_bytes() {
+        for byte in value.to_ne_bytes() {
             self.code.push(byte);
         }
     }
