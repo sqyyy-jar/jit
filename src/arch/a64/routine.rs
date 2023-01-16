@@ -213,17 +213,25 @@ impl Routine {
     }
 
     /// Stores a 32-bit constant in front of the code
-    pub fn const_32(&mut self, value: u32) {
+    ///
+    /// Return the index of the constant
+    pub fn const_32(&mut self, value: u32) -> usize {
+        let index = self.constants.len() / 4;
         for byte in value.to_ne_bytes() {
             self.constants.push(byte);
         }
+        index
     }
 
     /// Stores a 64-bit constant in front of the code
-    pub fn const_64(&mut self, value: u64) {
+    ///
+    /// Return the index of the constant
+    pub fn const_64(&mut self, value: u64) -> usize {
+        let index = self.constants.len() / 4;
         for byte in value.to_ne_bytes() {
             self.constants.push(byte);
         }
+        index
     }
 
     fn int_insn(&mut self, value: u32) {
