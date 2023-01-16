@@ -4,6 +4,7 @@ use std::{
     env::args,
     fs::File,
     io::{Result, Write},
+    panic,
 };
 
 pub mod arch;
@@ -11,6 +12,8 @@ pub mod assembler;
 pub mod mem;
 
 fn main() -> Result<()> {
+    panic::catch_unwind(|| std::process::exit(-1)).unwrap();
+
     const V: bool = true;
     let mut asm = Asm::default();
 
@@ -44,5 +47,5 @@ fn main() -> Result<()> {
 }
 
 extern "C" fn test() {
-    println!("test print")
+    panic!("test print")
 }
