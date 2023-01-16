@@ -54,7 +54,7 @@ pub fn make_executable_aligned(ptr: *mut u8, size: usize) -> bool {
             libc::mprotect(
                 ptr as *mut _,
                 align(size, alignment),
-                libc::PROT_READ | libc::PROT_EXEC,
+                libc::PROT_READ | libc::PROT_WRITE | libc::PROT_EXEC,
             ) == 0
         }
         #[cfg(windows)]
