@@ -4,7 +4,9 @@ use std::collections::HashMap;
 pub trait Assembler {
     type AsmRoutine: Subroutine;
 
-    fn get_label_address(&self, label: &str) -> usize;
+    fn global_const_address(&self) -> usize;
+
+    fn get_label_address(&self, label: &str) -> Option<usize>;
 
     fn jit(self) -> Option<VTable>;
 
