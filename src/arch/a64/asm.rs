@@ -1,10 +1,9 @@
+use super::routine::Routine;
 use crate::{
     assembler::{Assembler, PostOp, Subroutine, VTable},
     mem::{self, MemoryView, RawMemoryView, VecMemoryView},
 };
 use std::{collections::HashMap, mem::transmute};
-
-use super::routine::Routine;
 
 pub struct Asm {
     finalizing: bool,
@@ -35,9 +34,14 @@ impl Asm {
                 offset += 1;
             }
         }
-        for (offset, const_len, len, post_ops) in post_op_map {
+        for (offset, const_len, code_len, post_ops) in post_op_map {
             for post_op in post_ops {
-                post_op.process(self, address + offset, view.slice_at_mut(offset, const_len + len));
+                post_op.process(
+                    self,
+                    address + offset,
+                    const_len,
+                    view.slice_at_mut(offset, const_len + code_len),
+                );
             }
         }
     }

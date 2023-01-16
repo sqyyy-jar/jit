@@ -16,11 +16,23 @@ pub trait Subroutine {
 
     fn code(&self) -> &[u8];
 
-    fn process(&self, assembler: &impl Assembler, abs_addr: usize, bytes: &mut [u8]);
+    fn process(
+        &self,
+        assembler: &impl Assembler,
+        abs_addr: usize,
+        code_offset: usize,
+        bytes: &mut [u8],
+    );
 }
 
 pub trait PostOp {
-    fn process(&self, assembler: &impl Assembler, abs_addrs: usize, bytes: &mut [u8]);
+    fn process(
+        &self,
+        assembler: &impl Assembler,
+        abs_addr: usize,
+        code_offset: usize,
+        bytes: &mut [u8],
+    );
 }
 
 pub struct VTable {

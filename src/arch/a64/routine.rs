@@ -58,7 +58,7 @@ impl Routine {
     /// The relative address has to be multiplied by 4 to get the bytes to be branched
     pub fn br(&mut self, label: String) {
         self.post_ops.push(Op::Branch {
-            offset: self.constants.len() + self.code.len(),
+            entry_offset: self.code.len(),
             label,
         });
         self.nop();
@@ -95,7 +95,7 @@ impl Routine {
     /// Branches to the absolute address stored in a register storing PC+4 in the X30 register
     pub fn br_link(&mut self, label: String) {
         self.post_ops.push(Op::BranchWithLink {
-            offset: self.constants.len() + self.code.len(),
+            entry_offset: self.code.len(),
             label,
         });
         self.nop();
@@ -183,10 +183,10 @@ impl Routine {
 
     /// Loads the value of a constant
     ///
-    /// `offset` is the index of the constant, where each 32 bits increment the index by one
+    /// `offset` is the offset of the constant, represented in 32-bit steps
     pub fn ldr_const(&mut self, dst_reg: Reg, offset: usize) {
-        self.post_ops.push(Op::Const {
-            offset: self.constants.len() + self.code.len(),
+        self.post_ops.push(Op::LoadConst {
+            entry_offset: self.code.len(),
             dst_reg,
             const_offset: offset,
         });
@@ -223,66 +223,93 @@ impl Subroutine for Routine {
         &self.code
     }
 
-    fn process(&self, assembler: &impl Assembler, abs_addr: usize, bytes: &mut [u8]) {
+    fn process(
+        &self,
+        assembler: &impl Assembler,
+        abs_addr: usize,
+        code_offset: usize,
+        bytes: &mut [u8],
+    ) {
         for op in &self.post_ops {
-            op.process(assembler, abs_addr, bytes);
+            op.process(assembler, abs_addr, code_offset, bytes);
         }
     }
 }
 
 pub enum Op {
     Branch {
-        offset: usize,
+        entry_offset: usize,
         label: String,
     },
     BranchWithLink {
-        offset: usize,
+        entry_offset: usize,
         label: String,
     },
-    Const {
-        offset: usize,
+    LoadConst {
+        entry_offset: usize,
         dst_reg: Reg,
         const_offset: usize,
     },
 }
 
 impl PostOp for Op {
-    fn process(&self, assembler: &impl Assembler, abs_addr: usize, bytes: &mut [u8]) {
+    fn process(
+        &self,
+        assembler: &impl Assembler,
+        abs_addr: usize,
+        code_offset: usize,
+        bytes: &mut [u8],
+    ) {
         match self {
-            Self::Branch { offset, label } => {
+            Self::Branch {
+                entry_offset,
+                label,
+            } => {
                 let addr = assembler.get_label_address(label);
                 if addr == usize::MAX {
                     panic!("Tried to branch to non-existent label");
                 }
-                let rel = (addr as isize - *offset as isize - abs_addr as isize) / 4;
+                let rel = (addr as isize
+                    - code_offset as isize
+                    - *entry_offset as isize
+                    - abs_addr as isize)
+                    / 4;
                 if !(-0x2000000..=0x1FFFFFF).contains(&rel) {
                     panic!("Tried to branch to label not in range");
                 }
                 let insn = (0x14000000u32 | (rel as u32 & 0x3FFFFFF)).to_ne_bytes();
                 for (idx, byte) in insn.iter().enumerate() {
-                    bytes[offset + idx] = *byte;
+                    bytes[code_offset + entry_offset + idx] = *byte;
                 }
             }
-            Self::BranchWithLink { offset, label } => {
+            Self::BranchWithLink {
+                entry_offset,
+                label,
+            } => {
                 let addr = assembler.get_label_address(label);
                 if addr == usize::MAX {
                     panic!("Tried to branch to non-existent label");
                 }
-                let rel = (addr as isize - *offset as isize - abs_addr as isize) / 4;
+                let rel = (addr as isize
+                    - code_offset as isize
+                    - *entry_offset as isize
+                    - abs_addr as isize)
+                    / 4;
                 if !(-0x2000000..=0x1FFFFFF).contains(&rel) {
                     panic!("Tried to branch to label not in range");
                 }
                 let insn = (0x94000000u32 | (rel as u32 & 0x3FFFFFF)).to_ne_bytes();
                 for (idx, byte) in insn.iter().enumerate() {
-                    bytes[offset + idx] = *byte;
+                    bytes[code_offset + entry_offset + idx] = *byte;
                 }
             }
-            Self::Const {
-                offset,
+            Self::LoadConst {
+                entry_offset,
                 dst_reg,
                 const_offset,
             } => {
-                let rel = *const_offset as isize - *offset as isize / 4;
+                let rel =
+                    *const_offset as isize - (code_offset as isize + *entry_offset as isize) / 4;
                 if !(-0x40000..=0x3FFFF).contains(&rel) {
                     panic!("Tried to load constant that is not in range");
                 }
@@ -292,7 +319,7 @@ impl PostOp for Op {
                     | (*dst_reg as u32 & 0x1F))
                     .to_ne_bytes();
                 for (idx, byte) in insn.iter().enumerate() {
-                    bytes[offset + idx] = *byte;
+                    bytes[code_offset + entry_offset + idx] = *byte;
                 }
             }
         }
