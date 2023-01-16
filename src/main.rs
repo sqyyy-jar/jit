@@ -44,5 +44,5 @@ fn main() -> Result<()> {
 }
 
 extern "C" fn test() {
-    panic!("test panic")
+    println!("test print")
 }
