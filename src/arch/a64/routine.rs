@@ -56,18 +56,6 @@ impl Routine {
     /// this
     ///
     /// The relative address has to be multiplied by 4 to get the bytes to be branched
-    pub fn br(&mut self, label: String) {
-        self.post_ops.push(Op::Branch {
-            entry_offset: self.code.len(),
-            label,
-        });
-        self.nop();
-    }
-
-    /// Branches to a 26-bit address relative to the first byte of the instruction inserted through
-    /// this
-    ///
-    /// The relative address has to be multiplied by 4 to get the bytes to be branched
     pub fn br_rel(&mut self, rel26: i32) {
         self.int_insn(0x14000000 | (rel26 as u32 & 0x3FFFFFF));
     }
@@ -92,11 +80,42 @@ impl Routine {
         self.int_insn(0xD63F0000 | 0xD61F0000 | ((dst_reg as u32 & 0x1F) << 5));
     }
 
+    /// Branches to label that must be present in the V-Table
+    pub fn br(&mut self, label: String) {
+        self.post_ops.push(Op::Branch {
+            entry_offset: self.code.len(),
+            label,
+        });
+        self.nop();
+    }
+
     /// Branches to the absolute address stored in a register storing PC+4 in the X30 register
     pub fn br_link(&mut self, label: String) {
         self.post_ops.push(Op::BranchWithLink {
             entry_offset: self.code.len(),
             label,
+        });
+        self.nop();
+    }
+
+    /// Branches to an absolute address of a function
+    ///
+    /// The function must not be in the V-Table
+    pub fn br_extern(&mut self, addr: usize) {
+        self.post_ops.push(Op::BranchExtern {
+            entry_offset: self.code.len(),
+            addr,
+        });
+        self.nop();
+    }
+
+    /// Branches to an absolute address of a function storing PC+4 in the X30 register
+    ///
+    /// The function must not be in the V-Table
+    pub fn br_extern_link(&mut self, addr: usize) {
+        self.post_ops.push(Op::BranchExternWithLink {
+            entry_offset: self.code.len(),
+            addr,
         });
         self.nop();
     }
@@ -245,6 +264,14 @@ pub enum Op {
         entry_offset: usize,
         label: String,
     },
+    BranchExtern {
+        entry_offset: usize,
+        addr: usize,
+    },
+    BranchExternWithLink {
+        entry_offset: usize,
+        addr: usize,
+    },
     LoadConst {
         entry_offset: usize,
         dst_reg: Reg,
@@ -277,10 +304,11 @@ impl PostOp for Op {
                 if !(-0x2000000..=0x1FFFFFF).contains(&rel) {
                     panic!("Tried to branch to label not in range");
                 }
-                let insn = (0x14000000u32 | (rel as u32 & 0x3FFFFFF)).to_ne_bytes();
-                for (idx, byte) in insn.iter().enumerate() {
-                    bytes[code_offset + entry_offset + idx] = *byte;
-                }
+                write_ne_32(
+                    bytes,
+                    code_offset + entry_offset,
+                    0x14000000u32 | (rel as u32 & 0x3FFFFFF),
+                );
             }
             Self::BranchWithLink {
                 entry_offset,
@@ -298,10 +326,11 @@ impl PostOp for Op {
                 if !(-0x2000000..=0x1FFFFFF).contains(&rel) {
                     panic!("Tried to branch to label not in range");
                 }
-                let insn = (0x94000000u32 | (rel as u32 & 0x3FFFFFF)).to_ne_bytes();
-                for (idx, byte) in insn.iter().enumerate() {
-                    bytes[code_offset + entry_offset + idx] = *byte;
-                }
+                write_ne_32(
+                    bytes,
+                    code_offset + entry_offset,
+                    0x94000000u32 | (rel as u32 & 0x3FFFFFF),
+                );
             }
             Self::LoadConst {
                 entry_offset,
@@ -313,15 +342,51 @@ impl PostOp for Op {
                 if !(-0x40000..=0x3FFFF).contains(&rel) {
                     panic!("Tried to load constant that is not in range");
                 }
-                let insn = (0x18000000
-                    | ((is_64_bit(*dst_reg) as u32) << 30)
-                    | ((rel as u32 & 0x7FFFF) << 5)
-                    | (*dst_reg as u32 & 0x1F))
-                    .to_ne_bytes();
-                for (idx, byte) in insn.iter().enumerate() {
-                    bytes[code_offset + entry_offset + idx] = *byte;
+                write_ne_32(
+                    bytes,
+                    code_offset + entry_offset,
+                    0x18000000
+                        | ((is_64_bit(*dst_reg) as u32) << 30)
+                        | ((rel as u32 & 0x7FFFF) << 5)
+                        | (*dst_reg as u32 & 0x1F),
+                );
+            }
+            Self::BranchExtern { entry_offset, addr } => {
+                let rel = (*addr as isize
+                    - code_offset as isize
+                    - *entry_offset as isize
+                    - abs_addr as isize)
+                    / 4;
+                if !(-0x2000000..=0x1FFFFFF).contains(&rel) {
+                    panic!("Tried to branch to address not in range");
                 }
+                write_ne_32(
+                    bytes,
+                    code_offset + entry_offset,
+                    0x14000000u32 | (rel as u32 & 0x3FFFFFF),
+                );
+            }
+            Self::BranchExternWithLink { entry_offset, addr } => {
+                let rel = (*addr as isize
+                    - code_offset as isize
+                    - *entry_offset as isize
+                    - abs_addr as isize)
+                    / 4;
+                if !(-0x2000000..=0x1FFFFFF).contains(&rel) {
+                    panic!("Tried to branch to label not in range");
+                }
+                write_ne_32(
+                    bytes,
+                    code_offset + entry_offset,
+                    0x94000000u32 | (rel as u32 & 0x3FFFFFF),
+                );
             }
         }
+    }
+}
+
+fn write_ne_32(slice: &mut [u8], index: usize, value: u32) {
+    for (offset, byte) in value.to_ne_bytes().into_iter().enumerate() {
+        slice[index + offset] = byte;
     }
 }
