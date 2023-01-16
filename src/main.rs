@@ -18,6 +18,7 @@ fn main() -> Result<()> {
     main.sub_imm12(Reg::X31, Reg::X31, 16);
     main.str_uimm12_offset(Reg::X31, Reg::X30, 0);
     main.br_link("test".to_string());
+    main.br_extern_link(test as usize);
     main.ldr_uimm12_offset(Reg::X30, Reg::X31, 0);
     main.add_imm12(Reg::X31, Reg::X31, 16);
     main.ret();
@@ -37,4 +38,8 @@ fn main() -> Result<()> {
         vtable.lookup("main").unwrap()();
     }
     Ok(())
+}
+
+extern "C" fn test() {
+    panic!("test panic")
 }
