@@ -12,7 +12,10 @@ pub mod assembler;
 pub mod mem;
 
 fn main() -> Result<()> {
-    panic::catch_unwind(|| std::process::exit(-1)).unwrap();
+    panic::set_hook(Box::new(|it| {
+        println!("Panic: {}", it.to_string());
+        std::process::exit(-1);
+    }));
 
     const V: bool = true;
     let mut asm = Asm::default();
