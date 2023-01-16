@@ -14,11 +14,14 @@ fn main() -> Result<()> {
     const V: bool = true;
     let mut asm = Asm::default();
 
+    let g_test = asm.const_64(test as usize as _);
+
     let mut main = Routine::new("main".to_string());
     main.sub_imm12(Reg::X31, Reg::X31, 16);
     main.str_uimm12_offset(Reg::X31, Reg::X30, 0);
     main.br_link("test".to_string());
-    main.br_extern_link(test as usize);
+    main.ldr_global_const(Reg::X9, g_test);
+    main.br_reg_link(Reg::X9);
     main.ldr_uimm12_offset(Reg::X30, Reg::X31, 0);
     main.add_imm12(Reg::X31, Reg::X31, 16);
     main.ret();
