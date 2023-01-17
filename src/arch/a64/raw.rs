@@ -63,6 +63,24 @@ pub fn load_global_const(
     );
 }
 
+pub fn ldr_imm9_post_offset(dst_reg: Reg, src_reg: Reg, imm9: i16) -> u32 {
+    assert!(is_64_bit(dst_reg), "Destination register must be 64-bit");
+    0xB8400400
+        | ((is_64_bit(src_reg) as u32) << 30)
+        | ((imm9 as u32 & 0x1FF) << 12)
+        | ((dst_reg as u32 & 0x1F) << 5)
+        | (src_reg as u32 & 0x1F)
+}
+
+pub fn str_imm9_pre_offset(dst_reg: Reg, src_reg: Reg, imm9: i16) -> u32 {
+    assert!(is_64_bit(dst_reg), "Destination register must be 64-bit");
+    0xB8000C00
+        | ((is_64_bit(src_reg) as u32) << 30)
+        | ((imm9 as u32 & 0x1FF) << 12)
+        | ((dst_reg as u32 & 0x1F) << 5)
+        | (src_reg as u32 & 0x1F)
+}
+
 pub fn write_ne_32(slice: &mut [u8], index: usize, value: u32) {
     for (offset, byte) in value.to_ne_bytes().into_iter().enumerate() {
         slice[index + offset] = byte;

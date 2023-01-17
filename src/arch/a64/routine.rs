@@ -151,6 +151,20 @@ impl Routine {
         );
     }
 
+    /// Stores the value of `src_reg` into the address `dst_reg + imm9` where `imm9` is signed
+    /// and adds `imm9` to `dst_reg` afterwards
+    ///
+    /// If `src_reg` is 32-bit `imm9` will be multiplied by 4 before adding it to `dst_reg`
+    ///
+    /// If `src_reg` is 64-bit `imm9` will be multiplied by 8 before adding it to `dst_reg`
+    pub fn str_imm9_pre_offset(&mut self, dst_reg: Reg, src_reg: Reg, imm9: i16) {
+        write_ne_32(
+            self.alloc_insn(),
+            0,
+            super::raw::str_imm9_pre_offset(dst_reg, src_reg, imm9),
+        );
+    }
+
     /// Loads the value of address `src_reg + imm12` into `dst_reg` where `imm12` is unsigned
     ///
     /// If `dst_reg` is 32-bit `imm12` will be multiplied by 4 before adding it to `src_reg`
@@ -166,6 +180,19 @@ impl Routine {
                 | ((imm12 as u32 & 0xFFF) << 10)
                 | ((src_reg as u32 & 0x1F) << 5)
                 | (dst_reg as u32 & 0x1F),
+        );
+    }
+
+    /// Loads the value of address `src_reg + imm9` into `dst_reg` where `imm9` is signed
+    ///
+    /// If `dst_reg` is 32-bit `imm9` will be multiplied by 4 before adding it to `src_reg`
+    ///
+    /// If `dst_reg` is 64-bit `imm9` will be multiplied by 8 before adding it to `src_reg`
+    pub fn ldr_uimm9_post_offset(&mut self, dst_reg: Reg, src_reg: Reg, imm9: i16) {
+        write_ne_32(
+            self.alloc_insn(),
+            0,
+            super::raw::ldr_imm9_post_offset(dst_reg, src_reg, imm9),
         );
     }
 
