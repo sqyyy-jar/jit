@@ -1,0 +1,2 @@
+#!/bin/bash
+sudo docker run --rm -v /home/admin/projects/jit:/rust-project -w /rust-project rust-aarch64 cargo build --target=aarch64-unknown-linux-musl
