@@ -72,13 +72,41 @@ pub fn ldr_imm9_post_offset(dst_reg: Reg, src_reg: Reg, imm9: i16) -> u32 {
         | (src_reg as u32 & 0x1F)
 }
 
-pub fn str_imm9_pre_offset(dst_reg: Reg, src_reg: Reg, imm9: i16) -> u32 {
+pub fn ldp_imm7_post_offset(a_reg: Reg, b_reg: Reg, src_reg: Reg, imm7: i8) -> u32 {
+    assert!(is_64_bit(src_reg), "Destination register must be 64-bit");
+    assert!(
+        is_64_bit(a_reg) == is_64_bit(b_reg),
+        "Destination registers must be of same size"
+    );
+    0x28C00000
+        | ((is_64_bit(a_reg) as u32) << 31)
+        | ((imm7 as u32 & 0x7F) << 15)
+        | ((b_reg as u32 & 0x1F) << 10)
+        | ((src_reg as u32 & 0x1F) << 5)
+        | (a_reg as u32 & 0x1F)
+}
+
+pub fn str_imm9_pre_offset(src_reg: Reg, dst_reg: Reg, imm9: i16) -> u32 {
     assert!(is_64_bit(dst_reg), "Destination register must be 64-bit");
     0xB8000C00
         | ((is_64_bit(src_reg) as u32) << 30)
         | ((imm9 as u32 & 0x1FF) << 12)
         | ((dst_reg as u32 & 0x1F) << 5)
         | (src_reg as u32 & 0x1F)
+}
+
+pub fn stp_imm7_pre_offset(a_reg: Reg, b_reg: Reg, dst_reg: Reg, imm7: i8) -> u32 {
+    assert!(is_64_bit(dst_reg), "Destination register must be 64-bit");
+    assert!(
+        is_64_bit(a_reg) == is_64_bit(b_reg),
+        "Source registers must be of same size"
+    );
+    0x29800000
+        | ((is_64_bit(a_reg) as u32) << 31)
+        | ((imm7 as u32 & 0x7F) << 15)
+        | ((b_reg as u32 & 0x1F) << 10)
+        | ((dst_reg as u32 & 0x1F) << 5)
+        | (a_reg as u32 & 0x1F)
 }
 
 pub fn write_ne_32(slice: &mut [u8], index: usize, value: u32) {
